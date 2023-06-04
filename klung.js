@@ -3,18 +3,20 @@
 const fs = require("fs");
 const path = require("path");
 const util = require("util");
+const http = require("http");
 const exec = util.promisify(require("child_process").exec);
 
 let verbose;
 let superVerbose;
 let compileCommands = "compile_commands.json";
+let klang = "http://localhost:6677";
 let fiskc = "fiskc";
 let excludes = [];
 let includes = [];
 let extraArgs = [];
 let removeArgs = [];
 let standardRemoveArgs = [];
-let maxParallelJobs = 10;
+let maxParallelSha1Jobs = 10;
 let maxCount = Number.MAX_SAFE_INTEGER;
 
 const parallelize = (promiseCreators) => {
@@ -26,7 +28,7 @@ const parallelize = (promiseCreators) => {
         let rejected = false;
         const fill = () => {
             verbose(`Fill called with idx: ${idx}/${promiseCreators.length} active: ${active}`);
-            while (active < maxParallelJobs && idx < promiseCreators.length) {
+            while (active < maxParallelSha1Jobs && idx < promiseCreators.length) {
                 const promise = promiseCreators[idx]();
                 const then = (idx, result) => {
                     if (rejected) {
@@ -52,6 +54,11 @@ const parallelize = (promiseCreators) => {
         fill();
     });
 }
+
+const post = body => {
+
+
+};
 
 const sha1 = (command) => {
     return exec(`${fiskc} --fisk-dump-sha1 --fisk-compiler=${command}`).then(result => {
@@ -94,8 +101,8 @@ const usage = () => `klung.js ...
   [--help|-h]
   [--verbose|-v]
   [--version]
-  [--compile-commands|-c <file>]
-  [--fiskc <file>]
+  [--compile-commands|-c <file>] (default ${compileCommands})
+  [--fiskc <file>] (default ${fiskc})
   [--exclude|-e <pattern>]
   [--exclude-regex|-r <regex>]
   [--include|-i <pattern>]
@@ -103,9 +110,10 @@ const usage = () => `klung.js ...
   [--remove-arg|-R <pattern>]
   [--remove-arg-regex|-x <regex>]
   [--extra-arg|-A <arg>]
-  [--no-standard-remove-args]
-  [--max-parallel-sha1-jobs | -s <number>]
-  [--max-count|-n <number>]
+  [--klung|-k <address>] (default ${klung})
+  [--no-standard-remove-args] (default false)
+  [--max-parallel-sha1-jobs | -s <number>] (default ${maxParallelSha1Jobs})
+  [--max-count|-n <number>] (default ${maxCount})
 `;
 
 standardRemoveArgs.push(matchRegex.bind(undefined, /-Wa,--[0-9][0-9]/),
@@ -177,8 +185,8 @@ for (let idx=2; idx<process.argv.length; ++idx) {
         break;
     case "--max-parallel-sha1-jobs":
     case "-s":
-        maxParallelJobs = parseInt(process.argv[++idx]);
-        if (maxParallelJobs < 0 || !maxParallelJobs) {
+        maxParallelSha1Jobs = parseInt(process.argv[++idx]);
+        if (maxParallelSha1Jobs < 0 || !maxParallelSha1Jobs) {
             console.error("Invalid --max-parallel-sha1-jobs", process.argv[idx]);
             process.exit(1);
         }
@@ -253,6 +261,7 @@ compilationDatabase = compilationDatabase.filter(item => {
 });
 
 parallelize(compilationDatabase.map(item => sha1.bind(undefined, item.command))).then(results => {
+
     console.log(results);
 });
 
